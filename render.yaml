@@ -1,0 +1,18 @@
+# This file is a Render Blueprint, which automates service creation.
+# For more information, see https://render.com/docs/blueprint-spec
+
+services:
+  # This section defines our single web service.
+  - type: web
+    name: smart-video-tool
+    # The Dockerfile will be used to build the image.
+    runtime: docker
+    dockerfilePath: Dockerfile
+    # This automatically deploys every time you push to your main branch.
+    autoDeploy: true
+    # We use the starter plan for a balance of cost and performance.
+    plan: starter
+    # The port our Gradio application will listen on.
+    envVars:
+      - key: PORT
+        value: 7860
