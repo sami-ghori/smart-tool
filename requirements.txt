@@ -1,8 +1,9 @@
 opencv-python-headless==4.9.0.80
-gradio==4.24.0
+gradio==4.10.0
+gradio_client==0.8.0
 numpy==1.26.4
 webrtcvad==2.0.10
 soundfile==0.12.1
 tqdm==4.66.2
-noisereduce==3.0.3
+noisereduce==2.0.1
 scipy==1.13.0
