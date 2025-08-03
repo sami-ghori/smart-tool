@@ -2,8 +2,13 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies, including ffmpeg
-RUN apt-get update && apt-get install -y ffmpeg
+# Install system dependencies
+# This includes build-essential for compiling C/C++ extensions (like webrtcvad)
+# and ffmpeg for video/audio processing.
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libgl1-mesa-glx \
+    ffmpeg
 
 # Copy requirements.txt and install Python packages
 COPY requirements.txt .
