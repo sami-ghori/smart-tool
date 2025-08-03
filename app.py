@@ -42,18 +42,17 @@ def extract_audio(video_path, audio_path):
 
 def isolate_speaker_voice(audio_path, cleaned_audio_path, sample_rate=16000):
     """
-    Isolates speaker voice from noise using noisereduce (v3.x API).
+    Isolates speaker voice from noise using noisereduce (v2.x API).
+    Assumes the first 1 second of audio is a good representation of ambient noise.
     """
     try:
         audio, sr = sf.read(audio_path)
         if sr != sample_rate:
             pass
-
-        # Correct API usage for noisereduce v3.x
-        noise_profile = audio[:sample_rate]
-        nr_instance = nr.NoiseReduce(y=noise_profile, sr=sample_rate)
-        reduced_noise = nr_instance.reduce_noise(y=audio, sr=sample_rate)
-
+        
+        noise_clip = audio[:sample_rate]
+        reduced_noise = nr.reduce_noise(y=audio, sr=sample_rate, noise_clip=noise_clip)
+        
         sf.write(cleaned_audio_path, reduced_noise, sample_rate)
     except Exception as e:
         raise RuntimeError(f"Noise reduction failed: {e}")
@@ -65,7 +64,7 @@ def get_speech_segments(audio_path, sample_rate=16000, window_ms=30):
     samples_per_window = int(sample_rate * window_ms / 1000)
     bytes_per_sample = 2
     segments = []
-
+    
     for i in range(0, len(pcm), samples_per_window * bytes_per_sample):
         window = pcm[i:i + samples_per_window * bytes_per_sample]
         if len(window) < samples_per_window * bytes_per_sample:
@@ -102,14 +101,14 @@ def detect_face_with_coords(video_path, progress=None):
                 ret, frame = cap.retrieve()
                 if not ret:
                     break
-
+                
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
+                
                 if len(faces) > 0:
                     (x, y, w, h) = max(faces, key=lambda rect: rect[2] * rect[3])
                     face_coords.append((frame_idx / fps, (x, y, w, h)))
-
+                
                 pbar.update(1)
             frame_idx += 1
 
@@ -142,13 +141,13 @@ def extract_and_crop_clips(video_path, segments, face_coords, output_dir, progre
     for i, (start, end) in enumerate(tqdm(segments, desc="Cropping and re-encoding clips")):
         output_path = os.path.join(output_dir, f"clip_{i + 1}.mp4")
         coords_in_segment = [face_map[t] for t in range(int(start), int(end) + 1) if t in face_map]
-
+        
         if not coords_in_segment: continue
         min_x = min(c[0] for c in coords_in_segment)
         min_y = min(c[1] for c in coords_in_segment)
         max_x = max(c[0] + c[2] for c in coords_in_segment)
         max_y = max(c[1] + c[3] for c in coords_in_segment)
-
+        
         x = max(0, min_x - CROP_PADDING)
         y = max(0, min_y - CROP_PADDING)
         w = min(video_width - x, max_x - min_x + 2 * CROP_PADDING)
@@ -170,12 +169,12 @@ def process_video_pipeline(video_file, progress=gr.Progress(track_tqdm=True)):
         video_path = shutil.copy(video_file.name, os.path.join(temp_dir, "input_video.mp4"))
         audio_path = os.path.join(temp_dir, "audio.wav")
         cleaned_audio_path = os.path.join(temp_dir, "cleaned_audio.wav")
-
+        
         progress(0.05, desc="Starting parallel processing...")
         with concurrent.futures.ProcessPoolExecutor() as executor:
             future_audio = executor.submit(process_audio_pipeline, video_path, audio_path, cleaned_audio_path)
             future_faces = executor.submit(detect_face_with_coords, video_path)
-
+            
             progress(0.1, desc="Processing audio and video in parallel...")
             speech_times = future_audio.result()
             face_coords = future_faces.result()
@@ -188,7 +187,7 @@ def process_video_pipeline(video_file, progress=gr.Progress(track_tqdm=True)):
         os.makedirs(clips_dir, exist_ok=True)
         progress(0.8, desc="Cropping and re-encoding video clips...")
         extract_and_crop_clips(video_path, segments, face_coords, clips_dir, progress=progress)
-
+        
         zip_path = os.path.join(temp_dir, "clips.zip")
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for clip in os.listdir(clips_dir): zipf.write(os.path.join(clips_dir, clip), arcname=clip)
